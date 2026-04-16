@@ -24,6 +24,11 @@ public class Calculator {
         return (double) a / b;
     }
 
+    //Modulo
+    public static int modulo(int a, int b) {
+        return a % b;
+    }
+
     // Main method for testing
     public static void main(String[] args) {
         int a = 10;
@@ -33,5 +38,6 @@ public class Calculator {
         System.out.println("Subtraction: " + subtract(a, b));
         System.out.println("Multiplication: " + multiply(a, b));
         System.out.println("Division: " + divide(a, b));
+        System.out.println("Modulo: " + modulo(a,b));
     }
 }
