@@ -1,0 +1,211 @@
+GITHUB CONNECTOR - DOCUMENTATION
+
+
+1. AUTHENTICATION SETUP
+
+OAuth App Setup:
+  1. GitHub > Settings > Developer settings > OAuth Apps > New OAuth App
+  2. Set Authorization callback URL to > http://localhost:9090/Monolith/api/auth/login/github
+  3. Note the Client ID and Client Secret
+  4. Configure them in social.properties
+
+
+2. PACKAGE STRUCTURE
+
+Package: prerna.io.connector.github
+
+  GitHubUtils.java              - Token retrieval and login error handling
+  GitHubHelper.java             - Static methods wrapping GitHub REST API calls
+  GitHubUserReactor.java        - User profile operations
+  GitHubRepoReactor.java        - Repository listing and search
+  GitHubBranchReactor.java      - Branch list, create, delete
+  GitHubIssueReactor.java       - Issue CRUD, comments (add, edit, delete), search, list labels and collaborators
+  GitHubPullRequestReactor.java - Pull request CRUD, comments (add, edit, delete), files, search, list labels and collaborators
+
+
+3. REACTORS & ACTIONS
+
+3.1 GitHubUserReactor
+
+Fields: username (optional)
+
+  Get authenticated user
+    Fields : (none)
+    Method : GET https://api.github.com/user
+
+  Get user by username
+    Fields : username
+    Method : GET https://api.github.com/users/{username}
+
+
+3.2 GitHubRepoReactor
+
+Fields: action, owner, query, page, perPage
+
+  list_repos
+    Required : action
+    Optional : owner, page, perPage
+    Method   : GET https://api.github.com/user/repos (self)
+               GET https://api.github.com/users/{owner}/repos (by owner)
+
+  search_repos
+    Required : action, query
+    Optional : page, perPage
+    Method   : GET https://api.github.com/search/repositories?q={query}
+
+
+3.3 GitHubBranchReactor
+
+Fields: action, owner, repo, branch, fromBranch, page, perPage
+
+  list
+    Required : action, owner, repo
+    Optional : page, perPage
+    Method   : GET https://api.github.com/repos/{owner}/{repo}/branches
+
+  create
+    Required : action, owner, repo, branch
+    Optional : fromBranch (defaults to repo's default branch)
+    Method   : GET https://api.github.com/repos/{owner}/{repo}/git/ref/heads/{fromBranch}
+               POST https://api.github.com/repos/{owner}/{repo}/git/refs
+
+  delete
+    Required : action, owner, repo, branch
+    Method   : GET https://api.github.com/repos/{owner}/{repo}/branches/{branch} (verify)
+               DELETE https://api.github.com/repos/{owner}/{repo}/git/refs/heads/{branch}
+    Notes    : Only repo owner can delete. Cannot delete default or protected branches.
+
+
+3.4 GitHubIssueReactor
+
+Fields: action, owner, repo, issueNumber, title, body, state,
+        assignees, labels, commentId, query, page, perPage
+
+  list
+    Required : action, owner, repo
+    Optional : state, page, perPage
+    Method   : GET https://api.github.com/repos/{owner}/{repo}/issues?state=
+    Notes    : Filters out pull requests from results.
+
+  get
+    Required : action, owner, repo, issueNumber
+    Method   : GET https://api.github.com/repos/{owner}/{repo}/issues/{issueNumber}
+    Notes    : Rejects if item is a pull request.
+
+  get_comments
+    Required : action, owner, repo, issueNumber
+    Optional : page, perPage
+    Method   : GET https://api.github.com/repos/{owner}/{repo}/issues/{issueNumber}/comments
+
+  create
+    Required : action, owner, repo, title
+    Optional : body, assignees, labels
+    Method   : POST https://api.github.com/repos/{owner}/{repo}/issues
+
+  update
+    Required : action, owner, repo, issueNumber
+    Optional : title, body, state, assignees, labels
+    Method   : PATCH https://api.github.com/repos/{owner}/{repo}/issues/{issueNumber}
+    Notes    : Assignees and labels can be set directly here.
+
+  add_comment
+    Required : action, owner, repo, issueNumber, body
+    Method   : POST https://api.github.com/repos/{owner}/{repo}/issues/{issueNumber}/comments
+
+  edit_comment
+    Required : action, owner, repo, commentId, body
+    Method   : PATCH https://api.github.com/repos/{owner}/{repo}/issues/comments/{commentId}
+    Notes    : commentId is returned by get_comments and add_comment.
+
+  delete_comment
+    Required : action, owner, repo, commentId
+    Method   : DELETE https://api.github.com/repos/{owner}/{repo}/issues/comments/{commentId}
+    Notes    : commentId is returned by get_comments and add_comment.
+
+  search
+    Required : action, query
+    Optional : page, perPage
+    Method   : GET https://api.github.com/search/issues?q={query}+type:issue
+
+  list_labels
+    Required : action, owner, repo
+    Optional : page, perPage
+    Method   : GET https://api.github.com/repos/{owner}/{repo}/labels
+
+  list_collaborators
+    Required : action, owner, repo
+    Optional : page, perPage
+    Method   : GET https://api.github.com/repos/{owner}/{repo}/collaborators
+
+
+3.5 GitHubPullRequestReactor
+
+Fields: action, owner, repo, pullNumber, title, body, head, base,
+        state, assignees, labels, commentId, query, page, perPage
+
+  list
+    Required : action, owner, repo
+    Optional : state, page, perPage
+    Method   : GET https://api.github.com/repos/{owner}/{repo}/pulls?state=
+
+  get
+    Required : action, owner, repo, pullNumber
+    Method   : GET https://api.github.com/repos/{owner}/{repo}/pulls/{pullNumber}
+
+  get_files
+    Required : action, owner, repo, pullNumber
+    Optional : page, perPage
+    Method   : GET https://api.github.com/repos/{owner}/{repo}/pulls/{pullNumber}/files
+
+  get_comments
+    Required : action, owner, repo, pullNumber
+    Optional : page, perPage
+    Method   : GET https://api.github.com/repos/{owner}/{repo}/issues/{pullNumber}/comments
+    Notes    : Uses Issues API (GitHub stores PR comments there).
+
+  create
+    Required : action, owner, repo, title, head, base
+    Optional : body, assignees, labels
+    Method   : POST https://api.github.com/repos/{owner}/{repo}/pulls
+               PATCH https://api.github.com/repos/{owner}/{repo}/issues/{pullNumber} (if assignees or labels provided)
+    Notes    : head = source branch, base = target branch. Assignees and labels are set via the Issues API after creation.
+
+  update
+    Required : action, owner, repo, pullNumber
+    Optional : title, body, state, assignees, labels
+    Method   : PATCH https://api.github.com/repos/{owner}/{repo}/pulls/{pullNumber}
+               PATCH https://api.github.com/repos/{owner}/{repo}/issues/{pullNumber} (if assignees or labels provided)
+    Notes    : Assignees and labels are set via the Issues API.
+
+  add_comment
+    Required : action, owner, repo, pullNumber, body
+    Method   : POST https://api.github.com/repos/{owner}/{repo}/issues/{pullNumber}/comments
+
+  edit_comment
+    Required : action, owner, repo, commentId, body
+    Method   : PATCH https://api.github.com/repos/{owner}/{repo}/issues/comments/{commentId}
+    Notes    : commentId is returned by get_comments and add_comment.
+
+  delete_comment
+    Required : action, owner, repo, commentId
+    Method   : DELETE https://api.github.com/repos/{owner}/{repo}/issues/comments/{commentId}
+    Notes    : commentId is returned by get_comments and add_comment.
+
+  search
+    Required : action, query
+    Optional : page, perPage
+    Method   : GET https://api.github.com/search/issues?q={query}+type:pr
+
+  list_labels
+    Required : action, owner, repo
+    Optional : page, perPage
+    Method   : GET https://api.github.com/repos/{owner}/{repo}/labels
+
+  list_collaborators
+    Required : action, owner, repo
+    Optional : page, perPage
+    Method   : GET https://api.github.com/repos/{owner}/{repo}/collaborators
+
+
+
+
